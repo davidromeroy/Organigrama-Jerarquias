@@ -80,17 +80,17 @@
       <header id="custom-filters">
         <div>
           <select id="linea-negocio-select" class="control-select">
-            <option value="todos">TODA LÍNEA DE NEGOCIOS</option>
+            <!-- <option value="todos">TODA LÍNEA DE NEGOCIOS</option> -->
           </select>
 
-          <select id="centro-costos-select" class="control-select">
-            <option value="todos">TODO CENTRO DE COSTOS</option>
+          <select id="centro-costos-select" class="control-select" multiple="multiple">
+            <!-- <option value="todos">TODO CENTRO DE COSTOS</option> -->
           </select>
 
-          <select id="departamento-select" class="control-select">
-            <option value="todos">TODOS LOS DEPARTAMENTOS</option>
+          <select id="departamento-select" class="control-select" multiple="multiple">
+            <!-- <option value="todos">TODOS LOS DEPARTAMENTOS</option> -->
           </select>
-          <select id="modo-select" class="control-select">
+          <select id="modo-select" class="control-select" multiple="multiple">
             <option value="Persona">VISTA POR PERSONA</option>
             <option value="Cargo">VISTA POR CARGO</option>
           </select>
@@ -99,9 +99,7 @@
             <option value="1">1. Alta Dirección</option>
             <option value="2">2. Nivel Gerencial</option>
             <option value="3">3. Gerentes Corporativo/Producción</option>
-            <option value="4">
-              4. Gerentes de Plantas/Retail/ Contable/Logística
-            </option>
+            <option value="4">4. Gerentes de Plantas/Retail/ Contable/Logística</option>
             <option value="5">5. Nivel Jefaturas</option>
             <option value="6">6. Nivel Jefatura Sistemas</option>
             <option value="7">7. Nivel Coordinación/Administración</option>
@@ -610,10 +608,10 @@
         }
 
         // 1.1 Harcodeado para pruebas (//TODO:¡Eliminar en producción!)
-        /*
+        //*
         if (!receivedUserId) {
-          receivedUserId = "interno\\1207026814"; //Auxiliar
-          //receivedUserId = "interno\\dromero"; //Asistente de desarrollo
+          //receivedUserId = "interno\\1207026814"; //Auxiliar
+          receivedUserId = "interno\\dromero"; //Asistente de desarrollo
           console.log("Usando usuario interno\\dromero para pruebas");
         } //*/
 
@@ -894,176 +892,131 @@
 
       ///////// * Puebla el <select> con los filtros únicos de los nodos.
       function populateSelect(selectId, dataField, nodes) {
-        const selectElement = document.getElementById(selectId);
-        if (!selectElement) {
-          console.error(`No se encontró el select con ID: ${selectId}`);
-          return;
-        }
-
-        // 1. Obtener valores únicos
-        const valueSet = new Set();
-        nodes.forEach((node) => {
-          // Usamos [dataField] para acceder a la propiedad dinámicamente
-          if (node[dataField] && node[dataField] !== "N/A") {
-            valueSet.add(node[dataField]);
+          const selectElement = document.getElementById(selectId);
+          if (!selectElement) {
+              console.error(`No se encontró el select con ID: ${selectId}`);
+              return [];
           }
-        });
 
-        // 2. Ordenar alfabéticamente
-        const sortedValues = Array.from(valueSet).sort();
+          // 1. Obtener valores únicos
+          const valueSet = new Set();
+          nodes.forEach((node) => {
+              if (node[dataField] && node[dataField] !== "N/A") {
+                  valueSet.add(node[dataField]);
+              }
+          });
 
-        // 3. Limpiar opciones antiguas (excepto la primera "todos")
-        const firstOption = selectElement.options[0];
-        selectElement.innerHTML = ""; // Limpiar todo
-        if (firstOption) {
-          // Volver a añadir la opción "todos"
-          selectElement.appendChild(firstOption);
-        }
+          // 2. Ordenar alfabéticamente
+          const sortedValues = Array.from(valueSet).sort();
 
-        // 4. Crear y añadir <option>
-        sortedValues.forEach((value) => {
-          const option = document.createElement("option");
-          option.value = value;
-          option.textContent = value;
-          selectElement.appendChild(option);
-        });
-        // Devolvemos las opciones que encontramos
-        return sortedValues;
+          // 3. Limpiar opciones antiguas
+          // NOTA: Ya no agregamos la opción "TODOS" explícita al principio.
+          // En Multi-Select, si no hay nada seleccionado, se asume "Todos".
+          selectElement.innerHTML = ""; 
+
+          // 4. Crear y añadir <option> usando Fragmento (Mejora de rendimiento)
+          const fragment = document.createDocumentFragment();
+          sortedValues.forEach((value) => {
+              const option = document.createElement("option");
+              option.value = value;
+              option.textContent = value;
+              fragment.appendChild(option);
+          });
+          selectElement.appendChild(fragment);
+          // Devolvemos las opciones que encontramos
+          return sortedValues;
       }
 
       ///////// * Reconstruye el árbol manteniendo la jerarquía de los padres.
       function aplicarFiltrosJerarquicos() {
-        // 1. Validar que el chart esté listo
-        if (!chart) return;
+          // 1. Validar que el chart esté listo
+          if (!chart) return;
 
-        const currentMode = document.getElementById("modo-select").value;
-        const sourceNodes = currentMode === "Cargo" ? allCargoNodes : allNodes;
-        console.log(
-          `Aplicando filtros jerárquicos en modo '${currentMode}' con ${sourceNodes.length} nodos fuente.`
-        );
-        if (!sourceNodes.length) return; // No hay datos que filtrar
+          const currentMode = document.getElementById("modo-select").value;
+          const sourceNodes = currentMode === "Cargo" ? allCargoNodes : allNodes;
+          
+          // console.log(`Aplicando filtros Multiselect en modo '${currentMode}'`);
+          
+          if (!sourceNodes.length) return; 
 
-        // 2. Leer los 4 valores
-        const selectedLinea = document.getElementById(
-          "linea-negocio-select"
-        ).value;
-        const selectedCosto = document.getElementById(
-          "centro-costos-select"
-        ).value;
-        const selectedDept = document.getElementById(
-          "departamento-select"
-        ).value;
+          // 2. Obtener valores (Arrays)
+          // Helper: Si el array está vacío o es null, asumimos que son TODOS (true)
+          const getVals = (id) => {
+              const v = $(id).val();
+              return (v && v.length > 0) ? v : null; // Devolvemos null si son "todos"
+          };
 
-        // ✅ NUEVO: Obtener array de niveles (Select2 devuelve un array de strings)
-        const selectedNiveles = $("#nivel-select").val() || [];
+          const selectedLineas = getVals("#linea-negocio-select");
+          const selectedCostos = getVals("#centro-costos-select");
+          const selectedDeptos = getVals("#departamento-select");
+          const selectedNiveles = getVals("#nivel-select");
 
-        // 2. Determinar Nivel de Colapso (Profundidad)
-        // Si no hay selección o están todos, mostramos todo (o un default seguro)
-        // Si hay selección, buscamos el número más alto.
-        let maxLevelToShow = 99; // Default: Mostrar todo
-
-        if (
-          selectedNiveles.length > 0 &&
-          selectedNiveles.length < 12 &&
-          !selectedNiveles.includes("99")
-        ) {
-          // Convertir a números y buscar el máximo
-          const nivelesNumericos = selectedNiveles
-            .map((n) => parseInt(n))
-            .filter((n) => !isNaN(n));
-          if (nivelesNumericos.length > 0) {
-            // El nivel 0 es profundidad 1, Nivel 1 es prof 2, etc.
-            // Sumamos 1 porque 'level' en config es la cantidad de niveles visibles.
-            maxLevelToShow = Math.max(...nivelesNumericos) + 1;
-          }
-        }
-
-        // ✅ ACTUALIZAR CONFIGURACIÓN DE COLAPSO
-        // Esto le dice al gráfico: "Expande automáticamente hasta este nivel"
-        chart.config.collapse = {
-          level: maxLevelToShow,
-          allChildren: true,
-        };
-
-        // 3. Determinar si el filtro de nivel está ACTIVO
-        // Está activo si hay algo seleccionado, NO incluye el '99' (que usas como 'todos' o 'sin asignar')
-        // y no están seleccionados todos (menos de 12 opciones).
-        const isNivelActive =
-          selectedNiveles.length > 0 &&
-          !selectedNiveles.includes("99") &&
-          selectedNiveles.length < 12;
-
-        // 4. Si todos están en "todos", recargar el árbol completo
-        if (
-          selectedLinea === "todos" &&
-          selectedCosto === "todos" &&
-          selectedDept === "todos" &&
-          !isNivelActive // ✅ Verificamos si el nivel está inactivo
-        ) {
-          chart.load(sourceNodes); // (O 'sanitizedNodes' si es tu fuente de verdad)
-          //statusDiv.style.display = "none";
-          //loaderOverlay.classList.remove("visible");
-          return;
-        }
-
-        // --- Lógica de Filtro con Jerarquía (Adaptada) ---
-        // 4. Un mapa para buscar nodos por ID
-        const nodeMap = new Map(sourceNodes.map((node) => [node.id, node]));
-        /* console.log(
-          "4. Mapa de nodos creado para filtrado jerárquico.",
-          nodeMap
-        ); */
-        // 5. Un mapa para guardar los nodos que SÍ queremos mostrar
-        const nodesToShow = new Map();
-
-        // 6. Recorrer TODOS los nodos
-        for (const node of sourceNodes) {
-          // Comprobar si el nodo cumple con LOS 4 filtros (o si el filtro es "todos")
-          const lineaMatch =
-            selectedLinea === "todos" || node.lineaNegocio === selectedLinea;
-          const costosMatch =
-            selectedCosto === "todos" || node.centroCosto === selectedCosto;
-          const deptMatch =
-            selectedDept === "todos" || node.departamento === selectedDept;
-
-          const nivelMatch =
-            !isNivelActive || selectedNiveles.includes(String(node.order));
-
-          // Si el nodo coincide con todos los filtros activos
-          if (lineaMatch && costosMatch && deptMatch && nivelMatch) {
-            // Para cada nodo que coincide, añadirlo A ÉL Y A TODOS SUS PADRES
-            let currentNode = node;
-            while (currentNode) {
-              if (nodesToShow.has(currentNode.id)) {
-                break; // Si ya añadimos esta rama, paramos
+          // 2.1 Configuración de Colapso basada en Niveles (Tu lógica original mejorada)
+          let maxLevelToShow = 99; 
+          if (selectedNiveles && selectedNiveles.length > 0) {
+              // Filtramos solo números válidos (ignorando strings raros si los hubiera)
+              const nivelesNumericos = selectedNiveles
+                  .map(n => parseInt(n))
+                  .filter(n => !isNaN(n));
+                  
+              if (nivelesNumericos.length > 0) {
+                  maxLevelToShow = Math.max(...nivelesNumericos) + 1;
               }
-              nodesToShow.set(currentNode.id, currentNode);
-
-              // Subir al padre
-              if (currentNode.pid && nodeMap.has(currentNode.pid)) {
-                currentNode = nodeMap.get(currentNode.pid);
-              } else {
-                currentNode = null; // Llegamos a la raíz o a un nodo sin padre en el mapa
-              }
-            }
           }
-        }
 
-        // 7. Convertir el mapa de nodos a mostrar en un array y cargarlo
-        filteredNodes = Array.from(nodesToShow.values());
-        // console.log("10. Filtrado completo. Nodos a mostrar:", filteredNodes);
-        if (filteredNodes.length > 0) {
-          chart.load(filteredNodes);
-        } else {
-          // Si el filtro no devuelve nada, mostrar un gráfico vacío
-          chart.load([]);
-          // alert(
-          //   `No se encontraron resultados para esta combinación de filtros.`
-          // );
-        }
+          // Actualizar configuración de colapso
+          chart.config.collapse = {
+              level: maxLevelToShow,
+              allChildren: true,
+          };
 
-        //statusDiv.style.display = "none";
-        loaderOverlay.classList.remove("visible");
+          // 3. Mapa de nodos para búsquedas rápidas
+          const nodeMap = new Map(sourceNodes.map((node) => [node.id, node]));
+          const nodesToShow = new Map();
+
+          // 4. Recorrer TODOS los nodos y aplicar lógica OR
+          for (const node of sourceNodes) {
+              // A. Línea de Negocio: Si es null (todos) O el valor está en el array seleccionado
+              const lineaMatch = !selectedLineas || selectedLineas.includes(node.lineaNegocio);
+              
+              // B. Centro de Costos
+              const costosMatch = !selectedCostos || selectedCostos.includes(node.centroCosto);
+              
+              // C. Departamento
+              const deptMatch = !selectedDeptos || selectedDeptos.includes(node.departamento);
+
+              // D. Nivel Jerárquico
+              const nivelMatch = !selectedNiveles || selectedNiveles.includes(String(node.order));
+
+              // Si cumple TODAS las condiciones
+              if (lineaMatch && costosMatch && deptMatch && nivelMatch) {
+                  // Añadir nodo y todos sus ancestros
+                  let currentNode = node;
+                  while (currentNode) {
+                      if (nodesToShow.has(currentNode.id)) {
+                          break; // Ya procesado
+                      }
+                      nodesToShow.set(currentNode.id, currentNode);
+
+                      // Subir al padre
+                      if (currentNode.pid && nodeMap.has(currentNode.pid)) {
+                          currentNode = nodeMap.get(currentNode.pid);
+                      } else {
+                          currentNode = null; // Fin de la rama
+                      }
+                  }
+              }
+          }
+
+          // 5. Cargar resultado
+          filteredNodes = Array.from(nodesToShow.values());
+          if (filteredNodes.length > 0) {
+              chart.load(filteredNodes);
+          } else {
+              chart.load([]); // Gráfico vacío si no hay coincidencias
+          }
+
+          loaderOverlay.classList.remove("visible");
       }
 
       /* FUNCION PARA GENERAR URL DE LOS MANUALES */
@@ -1093,6 +1046,104 @@
         return `https://soporte.liris.com.ec/rhh/visor.html?Carpeta=${encodeURIComponent(
           carpeta
         )}&CodEmp=${codEmp || ""}&DepartMyProcessId=${depParam}`;
+      }
+
+      /**
+       * Configura un Select2 para comportarse como Multi-Select con Checkboxes.
+       */
+      function setupMultiSelect(selectorId, placeholderDefault) {
+          const $select = $(selectorId);
+
+          // 1. Template para Checkboxes en el dropdown
+          function formatOptionWithCheckbox(option) {
+              if (!option.id) return option.text;
+              const selectedValues = $select.val() || [];
+              // Si el valor está en el array, marcamos el checkbox
+              const isSelected = selectedValues.includes(option.id);
+              return $(`<span><input type="checkbox" ${isSelected ? 'checked' : ''} /> ${option.text}</span>`);
+          }
+
+          // 2. Inicializar Select2 con opciones específicas
+          $select.select2({
+              width: "240px",
+              multiple: true,
+              placeholder: placeholderDefault,
+              templateResult: formatOptionWithCheckbox,
+              closeOnSelect: false, // Mantiene el dropdown abierto al hacer clic
+              allowClear: true,
+              escapeMarkup: m => m
+          });
+
+          // Variable para evitar bucles infinitos en los eventos
+          let isProgrammaticUpdate = false;
+
+          // --- HELPER: Sincronizar visualmente (Fondo gris + Checkbox real) ---
+          const syncVisualState = () => {
+              setTimeout(() => {
+                  const currentVals = $select.val() || [];
+                  // Recorremos los elementos visuales generados por Select2
+                  $('.select2-results__options li').each(function() {
+                      // Select2 guarda la data del nodo en jQuery data
+                      const data = $(this).data('data'); 
+                      if(data) {
+                          const shouldBeSelected = currentVals.includes(data.id);
+                          // Marcar/Desmarcar input
+                          $(this).find('input[type="checkbox"]').prop('checked', shouldBeSelected);
+                          // Agregar/Quitar clase de resaltado
+                          if (shouldBeSelected) {
+                              $(this).addClass('select2-results__option--selected').attr('aria-selected', 'true');
+                          } else {
+                              $(this).removeClass('select2-results__option--selected').attr('aria-selected', 'false');
+                          }
+                      }
+                  });
+              }, 0);
+          };
+
+          // 3. Evento: Al abrir el select, sincronizar visualmente
+          $select.on('select2:open', syncVisualState);
+
+          // 4. Evento: Cambio de selección (Select / Unselect)
+          $select.on('select2:select select2:unselect', function (e) {
+              if (isProgrammaticUpdate) return;
+              
+              syncVisualState();
+              
+              // Lógica: Si el usuario desmarca TODO, asumimos "Todos" (vacío)
+              // Opcional: Podríamos forzar que se seleccionen todos visualmente, 
+              // pero en multi-select estándar, vacío = todos los resultados.
+              
+              updatePlaceholder();
+              
+              // DISPARAR FILTRADO: Usamos un evento personalizado 'change.logic'
+              // para separar la lógica de Select2 de nuestra lógica de negocio
+              $select.trigger('change.logic'); 
+          });
+
+          // 5. Evento: Limpiar (la X)
+          $select.on('select2:clearing', function (e) {
+              // Permitimos que se limpie, lo que dejará el value en [] (Todos)
+              // Solo actualizamos el placeholder y disparamos la lógica
+              setTimeout(() => {
+                  updatePlaceholder();
+                  $select.trigger('change.logic'); 
+              }, 10);
+          });
+
+          // Helper para actualizar el texto del input (Placeholder dinámico)
+          function updatePlaceholder() {
+              const val = $select.val() || [];
+              const total = $select.find('option').length;
+              let text = placeholderDefault;
+              
+              // Si hay selección parcial, mostramos cuántos
+              if (val.length > 0 && val.length < total) {
+                  text = `${val.length} SELECCIONADOS`;
+              }
+              
+              // Hack para actualizar el placeholder en Select2 Multi
+              $select.next('.select2-container').find('.select2-search__field').attr('placeholder', text);
+          }
       }
 
       // --- Función Principal: Cargar, Mapear y Renderizar ---
@@ -1683,7 +1734,7 @@
           // ];
 
           OrgChart.aiUI.title = "AI for LIRIS S.A."; //
-          OrgChart.SEARCH_PLACEHOLDER = "Buscar por nombre o puesto...";
+          OrgChart.SEARCH_PLACEHOLDER = "Buscar por nombre o cargo ...";
           //OrgChart.SEARCH_RESULT_LIMIT = 5; // Limita la lista a 5 resultados. El valor por defecto es 5.
           OrgChart.SEARCH_RESULT_LIMIT = Number.MAX_SAFE_INTEGER;
 
